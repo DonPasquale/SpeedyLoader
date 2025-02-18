@@ -1994,6 +1994,10 @@ input, select, textarea {
 		margin: 0 0 1em 0;
 	}
 
+	.features ul {
+		list-style-position: inside;
+	}
+
 		.features section {
 			padding: 1.0em 3em 1em 7em ;
 			width: 50%;
