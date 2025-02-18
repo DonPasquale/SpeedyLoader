@@ -2,10 +2,22 @@ const serialport = require('@serialport/bindings-cpp')
 const usb = require('usb')
 const {ipcRenderer} = require("electron")
 const { shell } = require('electron')
+//import { WebDFU } from "dfu";
+
+const boardFamilies = {
+  ATMEGA2560: "ATMEGA2560",
+  TEENSY35: "TEENSY35",
+  TEENSY36: "TEENSY36",
+  TEENSY41: "TEENSY41",
+  STM32F407_DFU: "STM32F407_DFU"
+}
 
 var basetuneList = [];
 var useLocalTune = false;
 var localTuneFile = "";
+var uploadBoard = ""; 
+var uploadVid;
+var uploadPid;
 
 function getTeensyVersion(id)
 {
@@ -119,7 +131,8 @@ function refreshSerialPorts()
     })
 
     //Look for any STM32 devices in DFU mode
-    var stmDFUDevices = usb.getDeviceList().filter( function(d) {
+    var stmDFUDevices = usb.getDeviceList().filter( function(d) 
+    {
       return d.deviceDescriptor.idVendor===0x0483 && d.deviceDescriptor.bcdDevice===0x2200; //Interface class 3 is HID
     });
     stmDFUDevices.forEach((device, index) => {
@@ -184,9 +197,10 @@ function refreshDetails()
     var selectElement = document.getElementById('versionsSelect');
     var version = selectElement.options[selectElement.selectedIndex].value;
     var url = "https://api.github.com/repos/noisymime/speeduino/releases/tags/" + version;
+    //url = "https://api.github.com/repos/noisymime/transfer-test-repo/releases/tags/1.0.0";
 
     document.getElementById('detailsText').innerHTML = "";
-    document.getElementById('detailsHeading').innerHTML = version;
+    document.getElementById('detailsHeading').innerHTML = "";
     
     fetch(url)
     .then((response) => {
@@ -473,23 +487,23 @@ function downloadHex(board, localFile="")
 
     var DLurl;
     switch(board) {
-      case "TEENSY35":
+      case boardFamilies.TEENSY35:
         DLurl = "http://speeduino.com/fw/teensy35/" + e.options[e.selectedIndex].value + "-teensy35.hex";
         console.log("Downloading Teensy 35 firmware: " + DLurl);
         break;
-      case "TEENSY36":
+      case boardFamilies.TEENSY36:
         DLurl = "http://speeduino.com/fw/teensy36/" + e.options[e.selectedIndex].value + "-teensy36.hex";
         console.log("Downloading Teensy 36 firmware: " + DLurl);
         break;
-      case "TEENSY41":
+      case boardFamilies.TEENSY41:
         DLurl = "http://speeduino.com/fw/teensy41/" + e.options[e.selectedIndex].value + "-teensy41.hex";
         console.log("Downloading Teensy 41 firmware: " + DLurl);
         break;
-      case "ATMEGA2560":
+      case boardFamilies.ATMEGA2560:
         DLurl = "http://speeduino.com/fw/bin/" + e.options[e.selectedIndex].value + ".hex";
         console.log("Downloading AVR firmware: " + DLurl);
         break;
-      case "STM32F407_DFU":
+      case boardFamilies.STM32F407_DFU:
         DLurl = "http://speeduino.com/fw/stm32f407/" + e.options[e.selectedIndex].value + "-stm32f407.bin";
         console.log("Downloading STM32F407 firmware: " + DLurl);
         break;
@@ -559,8 +573,6 @@ function installDrivers()
 function downloadComplete(file)
 {
   //Lookup what platform we're using
-  var portSelect = document.getElementById('portsSelect');
-  var uploadBoard = portSelect.options[portSelect.selectedIndex].getAttribute("board");
   var extension = file.substr(file.length - 3);
   if(extension == "ini")
   {
@@ -600,8 +612,8 @@ function downloadComplete(file)
         port: uploadPort,
         firmwareFile: file,
         board: uploadBoard,
-        vid: portSelect.options[portSelect.selectedIndex].getAttribute("vid"),
-        pid: portSelect.options[portSelect.selectedIndex].getAttribute("pid")
+        vid: uploadVid,
+        pid: uploadPid
       });
     }
     else
@@ -699,7 +711,6 @@ async function checkForUpdates()
     document.getElementById('title').innerHTML = "Speeduino Universal Firmware Loader (v" + current_version + ")"
 
     var url = "https://api.github.com/repos/speeduino/SpeedyLoader/releases/latest";
-
     //document.getElementById('detailsHeading').innerHTML = version;
 
     fetch(url)
@@ -760,6 +771,10 @@ $(function(){
 	});
 
 	$(document).on('click', '#btnInstall', function(event) {
+    var portSelect = document.getElementById('portsSelect');
+    uploadBoard = portSelect.options[portSelect.selectedIndex].getAttribute("board");
+    uploadPid = portSelect.options[portSelect.selectedIndex].getAttribute("pid");
+    uploadVid = portSelect.options[portSelect.selectedIndex].getAttribute("vid");
 		$("[href='#progress']").trigger('click');
 		uploadFW();
 	});
