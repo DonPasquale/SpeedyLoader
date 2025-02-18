@@ -541,15 +541,35 @@ function downloadIni()
 
 }
 
-function downloadBasetune()
+//Check if a URL is valid. 
+//Returns true if the URL is valid, false if it is not.
+async function checkURL(url) { 
+  try { 
+    const response = await fetch(url);  
+    if (!response.ok) { return false; }
+  } catch (error) { 
+    console.log(`Error checking URL: ${error}`); 
+  } 
+  
+  return true;
+} 
+
+async function downloadBasetune()
 {
   console.log("downloading");
   
   var basetuneSelect = document.getElementById('basetunesSelect');
   var basetuneOption = basetuneSelect.options[basetuneSelect.selectedIndex];
-  //var version = document.getElementById('versionsSelect');
-  //var DLurl = "https://github.com/noisymime/speeduino/raw/" + version + "/reference/Base%20Tunes/" + e.options[e.selectedIndex].value;
-  var DLurl = "https://github.com/speeduino/Tunes/raw/main/" + basetuneOption.dataset.make + "/" + basetuneOption.dataset.filename;
+  
+  var e = document.getElementById('versionsSelect');
+  var fwVersionTrimmed = e.options[e.selectedIndex].value.split(".")[0];
+  var DLurl = "https://github.com/speeduino/Tunes/raw/" + fwVersionTrimmed + "/" + basetuneOption.dataset.make + "/" + basetuneOption.dataset.filename;
+  if(await checkURL(DLurl) == false)
+  {
+    //If the specific fw version of the tune doesn't exist, just download the latest version
+    DLurl = "https://github.com/speeduino/Tunes/raw/main/" + basetuneOption.dataset.make + "/" + basetuneOption.dataset.filename;
+    console.log("Specific tune version not found, downloading latest version");
+  }
   console.log("Downloading: " + DLurl);
 
   //Download the ini file
