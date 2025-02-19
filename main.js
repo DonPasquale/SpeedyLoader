@@ -377,7 +377,7 @@ ipcMain.on("uploadFW_stm32", (e, args) => {
     if(process.platform == "win32") { executableName = executableName + '.exe'; } //This must come after the configName line above
     
     console.log(executableName);
-    const child = execFile(executableName, execArgs);
+    const child = execFile(executableName, execArgs, { timeout: 10000 });
   
     child.stdout.on('data', (data) => {
       console.log(`teensy_loader_cli stdout:\n${data}`);
