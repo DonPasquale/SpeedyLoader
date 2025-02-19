@@ -15,6 +15,7 @@ var dfuutilIsRunning = false;
 var teensyLoaderErr = ""
 var dfuutilErr = ""
 var dfuUtilStatus = ""
+var retryCount = 0;
 
 function createWindow () 
 {
@@ -339,70 +340,70 @@ ipcMain.on("uploadFW_stm32", (e, args) => {
 
 });
 
-  ipcMain.on('uploadFW_teensy', (e, args) => {
+function uploadFW_teensy(e, args)
+{
+  if(teensyLoaderIsRunning == true) { return; }
+  teensyLoaderIsRunning = true; //Indicate that an avrdude process has started
+  var platform;
 
-    if(teensyLoaderIsRunning == true) { return; }
-    teensyLoaderIsRunning = true; //Indicate that an avrdude process has started
-    var platform;
+  var burnStarted = false;
+  var burnPercent = 0;
+
+  //All Windows builds use the 32-bit binary
+  if(process.platform == "win32") 
+  { 
+    platform = "teensy_loader_cli-windows"; 
+  }
+  //All Mac builds use the 64-bit binary
+  else if(process.platform == "darwin") 
+  { 
+    platform = "teensy_loader_cli-darwin-x86_64";
+  }
+  else if(process.platform == "linux") 
+  { 
+    if(process.arch == "x32") { platform = "teensy_loader_cli-linux_i686"; }
+    else if(process.arch == "x64") { platform = "teensy_loader_cli-linux_x86_64"; }
+    else if(process.arch == "arm") { platform = "teensy_loader_cli-armhf"; }
+    else if(process.arch == "arm64") { platform = "teensy_loader_cli-aarch64"; }
+  }
+
+  var executableName = __dirname + "/bin/" + platform + "/teensy_post_compile";
+  executableName = executableName.replace('app.asar',''); //This is important for allowing the binary to be found once the app is packaed into an asar
+  var configName = executableName + ".conf";
   
-    var burnStarted = false;
-    var burnPercent = 0;
+
+  var execArgs = ['-board='+args.board, '-reboot', '-file='+path.basename(args.firmwareFile, '.hex'), '-path='+path.dirname(args.firmwareFile), '-tools='+executableName.replace('/teensy_post_compile', "")];
+  //console.log(execArgs);
+
+  if(process.platform == "win32") { executableName = executableName + '.exe'; } //This must come after the configName line above
   
-    //All Windows builds use the 32-bit binary
-    if(process.platform == "win32") 
-    { 
-      platform = "teensy_loader_cli-windows"; 
+  console.log(executableName);
+  const child = execFile(executableName, execArgs, { timeout: 10000 });
+
+  child.stdout.on('data', (data) => {
+    console.log(`teensy_loader_cli stdout:\n${data}`);
+  });
+
+  child.stderr.on('data', (data) => {
+    console.log(`teensy_loader_cli stderr: ${data}`);
+    teensyLoaderErr = teensyLoaderErr + data;
+
+    //Check if avrdude has started the actual burn yet, and if so, track the '#' characters that it prints. Each '#' represents 1% of the total burn process (50 for write and 50 for read)
+    if (burnStarted == true)
+    {
+      if(data=="#") { burnPercent += 1; }
+      e.sender.send( "upload percent", burnPercent );
     }
-    //All Mac builds use the 64-bit binary
-    else if(process.platform == "darwin") 
-    { 
-      platform = "teensy_loader_cli-darwin-x86_64";
-    }
-    else if(process.platform == "linux") 
-    { 
-      if(process.arch == "x32") { platform = "teensy_loader_cli-linux_i686"; }
-      else if(process.arch == "x64") { platform = "teensy_loader_cli-linux_x86_64"; }
-      else if(process.arch == "arm") { platform = "teensy_loader_cli-armhf"; }
-      else if(process.arch == "arm64") { platform = "teensy_loader_cli-aarch64"; }
-    }
-  
-    var executableName = __dirname + "/bin/" + platform + "/teensy_post_compile";
-    executableName = executableName.replace('app.asar',''); //This is important for allowing the binary to be found once the app is packaed into an asar
-    var configName = executableName + ".conf";
-    
-  
-    var execArgs = ['-board='+args.board, '-reboot', '-file='+path.basename(args.firmwareFile, '.hex'), '-path='+path.dirname(args.firmwareFile), '-tools='+executableName.replace('/teensy_post_compile', "")];
-    //console.log(execArgs);
-  
-    if(process.platform == "win32") { executableName = executableName + '.exe'; } //This must come after the configName line above
-    
-    console.log(executableName);
-    const child = execFile(executableName, execArgs, { timeout: 10000 });
-  
-    child.stdout.on('data', (data) => {
-      console.log(`teensy_loader_cli stdout:\n${data}`);
-    });
-  
-    child.stderr.on('data', (data) => {
-      console.log(`teensy_loader_cli stderr: ${data}`);
-      teensyLoaderErr = teensyLoaderErr + data;
-  
-      //Check if avrdude has started the actual burn yet, and if so, track the '#' characters that it prints. Each '#' represents 1% of the total burn process (50 for write and 50 for read)
-      if (burnStarted == true)
+    else
+    {
+      //This is a hack, but basically watch the output from teensy loader for the term 'Writing | ', everything after that is the #s indicating 1% of burn. 
+      if(teensyLoaderErr.substr(teensyLoaderErr.length - 10) == "Writing | ")
       {
-        if(data=="#") { burnPercent += 1; }
-        e.sender.send( "upload percent", burnPercent );
+        burnStarted = true;
       }
-      else
-      {
-        //This is a hack, but basically watch the output from teensy loader for the term 'Writing | ', everything after that is the #s indicating 1% of burn. 
-        if(teensyLoaderErr.substr(teensyLoaderErr.length - 10) == "Writing | ")
-        {
-          burnStarted = true;
-        }
-      }
-      
-    });
+    }
+    
+  });
 
   child.on('error', (err) => 
   {
@@ -416,15 +417,29 @@ ipcMain.on("uploadFW_stm32", (e, args) => {
     teensyLoaderIsRunning = false;
     if (code !== 0) 
     {
-      console.log(`teensyLoader process exited with code ${code}`);
-      e.sender.send( "upload error", teensyLoaderErr )
-      teensyLoaderErr = "";
+      if(retryCount == 0)
+      {
+        retryCount++;
+        console.log(`teensyLoader process exited with error. Retrying once...`);
+        uploadFW_teensy(e, args);
+        return;
+      }
+      else
+      {
+        console.log(`teensyLoader process exited with code ${code}`);
+        e.sender.send( "upload error", teensyLoaderErr )
+        teensyLoaderErr = "";
+      }
     }
     else
     {
-      e.sender.send( "upload completed", code )
+      e.sender.send( "upload completed", code );
+      retryCount = 0;
     }
   });
+}
+ipcMain.on('uploadFW_teensy', (e, args) => {
+  uploadFW_teensy(e, args);
 });
 
 ipcMain.handle('getAppVersion', async (e) => {
