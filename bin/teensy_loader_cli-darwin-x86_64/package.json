@@ -3,5 +3,5 @@
     "name": "tool-teensy",
     "system": "darwin_x86_64",
     "url": "https://www.pjrc.com/teensy/loader.html",
-    "version": "1.152.0"
+    "version": "1.157.0"
 }
