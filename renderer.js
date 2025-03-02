@@ -1,7 +1,6 @@
-const serialport = require('@serialport/bindings-cpp')
 const usb = require('usb')
 const {ipcRenderer} = require("electron")
-const { shell } = require('electron')
+//const { shell } = require('electron')
 //import { WebDFU } from "dfu";
 
 const boardFamilies = {
@@ -51,6 +50,7 @@ function getTeensyVersion(id)
 
 function refreshSerialPorts()
 {
+  const serialport = require('@serialport/bindings-cpp')
   serialport.autoDetect().list().then(ports => {
     console.log('Serial ports found: ', ports);
   
@@ -138,6 +138,32 @@ function refreshSerialPorts()
     stmDFUDevices.forEach((device, index) => {
       console.log("STM32 in DFU mode found: ", device.deviceDescriptor.bcdDevice)
       console.log("STM32 PID: ", device.deviceDescriptor.idProduct.toString(16).toUpperCase())
+      /*
+      ** Below is experimental for using webDFU
+      console.log("STM32 bcd: ", device.getBosDescriptor(function(error, desc) { return desc; }));
+
+      const selectedDevice = navigator.usb.requestDevice({ filters: [] });
+
+      // Create and init the WebDFU instance
+      const webdfu = new WebDFU(selectedDevice, { forceInterfacesName: true });
+      webdfu.init();
+
+      if (webdfu.interfaces.length == 0) {
+        throw new Error("The selected device does not have any USB DFU interfaces.");
+      }
+
+      // Connect to first device interface
+      webdfu.connect(0);
+
+      console.log({
+        Version: webdfu.properties.DFUVersion.toString(16),
+        CanUpload: webdfu.properties.CanUpload,
+        CanDownload: webdfu.properties.CanDownload,
+        TransferSize: webdfu.properties.TransferSize,
+        DetachTimeOut: webdfu.properties.DetachTimeOut,
+      });
+      */
+
       var newOption = document.createElement('option');
       newOption.value = "STM32F407_DFU";
       newOption.innerHTML = "STM32F407 in DFU mode";
@@ -223,7 +249,7 @@ function refreshDetails()
 
 }
 
-function refreshAvailableFirmwares()
+function refreshAvailableFirmwares(retries)
 {
     //Disable the buttons. These are only re-enabled if the retrieve is successful
     var DetailsButton = document.getElementById("btnDetails");
@@ -279,7 +305,12 @@ function refreshAvailableFirmwares()
         else
         {
             newOption.value = "Cannot retrieve firmware list";
-            newOption.innerHTML = "Cannot retrieve firmware list. Check internet connection and restart";
+            if(retries == 0)
+            {
+              console.log("Cannot retrieve firmware list. Retrying...");
+              refreshAvailableFirmwares(retries+1);
+            }
+            else { newOption.innerHTML = "Cannot retrieve firmware list. Check internet connection and restart"; }
         }
         select.appendChild(newOption);
 
@@ -760,7 +791,7 @@ async function checkForUpdates()
 }
 
 window.onload = function () {
-    refreshAvailableFirmwares();
+    refreshAvailableFirmwares(0);
     refreshBasetunes();
     refreshSerialPorts();
     checkForUpdates();

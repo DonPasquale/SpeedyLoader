@@ -1,5 +1,4 @@
 const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron')
-const {download} = require('electron-dl')
 const {execFile} = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -120,6 +119,7 @@ ipcMain.on('download', (e, args) => {
       e.sender.send( "download complete", fullFile, "exists" );
     } 
     else {
+      const {download} = require('electron-dl')
       download(BrowserWindow.getFocusedWindow(), args.url, options)
         .then(dl => e.sender.send( "download complete", dl.getSavePath(), dl.getState() ) )
         .catch(console.error);
